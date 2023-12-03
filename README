@@ -1,0 +1,19 @@
+Human Task Adaptation of the Abstraction and Reasoning Corpus
+Data Processing Scripts
+
+Other repositories for this project:
+- https://github.com/lbakst/ARC-eyetracking
+- https://github.com/ahn-cj/ARC_gym
+- https://github.com/ahn-cj/ARC-behavioral
+- https://github.com/ahn-cj/ARC-data
+- https://github.com/ahn-cj/ARC-backend-server
+
+Kaggle Abstraction and Reasoning Challenge
+https://www.kaggle.com/competitions/abstraction-and-reasoning-challenge/
+
+Chollet, F. (2019). On the Measure of Intelligence.
+https://doi.org/10.48550/arXiv.1911.01547
+
+Johnson A. et al. (2021) Fast and flexible: Human program induction in abstract
+reasoning tasks.
+https://doi.org/10.48550/arXiv.2103.05823

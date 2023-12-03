@@ -1,0 +1,149 @@
+---
+title: "ARC Eye Tracking"
+author: Michael Pascale
+date: now
+date-format: 'MMMM D, YYYY H:mm z'
+knitr:
+  opts_chunk:
+    dev.args:
+      png: {bg: "transparent"}
+format:
+  revealjs:
+    theme: serif
+    editor: visual
+---
+
+```{r}
+library(dplyr)
+library(purrr)
+library(stringr)
+library(ggplot2)
+library(jsonlite)
+
+# arcpal <- c('#000000', '#0074D9', '#FF4136', '#2ECC40', '#FFDC00',
+#            '#AAAAAA', '#F012BE', '#FF851B', '#7FDBFF', '#870C25')
+arcpal <- c('#2B2B2B', '#248ADA', '#C71010', '#1FC719', '#F7DE28', 
+            '#878494', '#F954F2', '#EE6000', '#6B23A9', '#8B5A28')
+
+training <- readRDS('data/training-arc-behavioral-eye-tracking-202311081400.rds')
+
+files <- dir(Sys.getenv('ARC_Eyetracking'), full.names = TRUE, pattern='sub\\d+\\.csv$', recursive = TRUE)
+
+etdata <- 
+  set_names(files) |>
+  map(read.csv) |>
+  list_rbind(names_to='file') |>
+  mutate(
+    .before=1,
+    participant = as.factor(as.integer(str_extract(basename(file), pattern='(?<=sub)\\d+'))),
+    problem = as.factor(as.integer(str_extract(basename(file), pattern='(?<=prob)\\d+'))),
+    csperformance = factor(str_extract(file, '\\w+(?=Performance)'), c('low', 'high'))
+  ) |>
+  relocate(file, .after=last_col()) |>
+  tibble()
+
+ettheme <- 
+  list(
+      coord_fixed(),
+      theme_linedraw(),
+      theme(
+        panel.background = element_rect(fill='transparent', color=NA),
+        plot.background = element_rect(fill='transparent', color=NA),
+        legend.background = element_rect(fill='transparent', color=NA),
+        legend.key = element_rect(fill='transparent', color=NA),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        legend.justification = c(0, 1)
+      )
+  )
+```
+
+## Raw Fixation Data
+
+::: {layout-ncol="2" style="background-color: transparent;"}
+```{r}
+ggplot(etdata) +
+  geom_path(aes(x, y), color='grey80', alpha=.2) +
+  geom_point(aes(x, y, shape=participant, color=scale(duration))) +
+  scale_shape_manual('Participant (Pilot)', values=1:7) +
+  scale_color_continuous('Duration (Z-Score)', type='viridis') +
+  labs(
+    x='X-Coordinate (Pixel)',
+    y='Y-Coordinate (Pixel)'
+  ) +
+  ettheme
+```
+
+```{r}
+etdata |>
+  filter(!is.nan(tileX)) |>
+  ggplot() +
+  facet_wrap(vars(ROI), ncol=3, strip.position='bottom') +
+  geom_path(aes(tileX, tileY), color='grey80', alpha=.2) +
+  geom_point(aes(tileX, tileY, shape=participant, color=scale(duration))) +
+  scale_shape_manual('Participant (Pilot)', values=1:7) +
+  scale_color_continuous('Duration (Z-Score)', type='viridis') +
+  labs(
+    x='X-Coordinate (Tile)',
+    y='Y-Coordinate (Tile)'
+  ) +
+  ettheme
+```
+:::
+
+<!--# Generate Slides for Each Problem -->
+
+```{r, output='asis'}
+for (i in sort(unique(etdata$problem))) {
+#i <- 39
+  cat('## Problem ', i, '\n\n')
+  
+  etdata_problem <-
+    etdata |>
+    filter(
+      problem == i,
+      ROI != 0
+    ) |>
+    mutate(
+      phase = 
+        case_when(between(ROI, 1, 6) ~ 0, .default=1) |>
+        factor(0:1, c('Train', 'Test')),
+      io = 
+        case_when(ROI %in% c(1,3,5,7) ~ 0, .default=1) |>
+        factor(0:1, c('Input', 'Output')),
+      item =
+        case_when(
+          ROI %in% 1:2 ~ 1,
+          ROI %in% 3:4 ~ 2,
+          ROI %in% 5:6 ~ 3,
+          ROI %in% 7:8 ~ 1  # It's assumed that we have only the first test
+        ) |>
+        factor(1:6)
+    )
+  
+  training_problem <-
+    training |>
+    filter(task == i)
+  
+  plt <- training_problem |>
+    ggplot() +
+    geom_raster(aes(y, x, fill=val)) +
+
+    geom_path(data=etdata_problem,
+              aes(tileX, tileY), color='grey80', alpha=.2) +
+    geom_point(data=etdata_problem,
+               aes(tileX, tileY, shape=participant, color=scale(duration))) +
+    
+    scale_shape_manual('Participant (Pilot)', values=1:7) +
+    scale_color_continuous('Duration (Z-Score)', type='viridis') +
+    
+    facet_grid(vars(interaction(phase, item, sep=' ', lex.order=TRUE)), vars(io), switch='y') +
+    
+    # colors from common.css
+    scale_fill_manual(values=arcpal, guide='none') +
+    ettheme
+  
+  print(plt)
+  cat('\n\n')
+}
+```
