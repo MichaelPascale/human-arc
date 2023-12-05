@@ -1,9 +1,11 @@
 
+library(tidyr)
 library(dplyr)
 library(purrr)
 library(jsonlite)
 library(stringr)
 library(lubridate)
+library(ggplot2)
 
 datapath <- 'data/ARC-data/MTurk/mturk subject data'
 # datapath <- 'data/ARC-data/BU online/subject_data/all-sub-raw'
@@ -63,4 +65,58 @@ behavioral |>
     edits_median = median(n_events),
     edits_max = max(n_events)
   )
+
+behavioral |>
+  group_by(problem, attempt) |>
+  summarize(
+    edits_mean = mean(n_events),
+    edits_median = median(n_events),
+    edits_max = max(n_events),
+    n = n()
+  )
+
+behavioral |>
+  group_by(problem, attempt) |>
+  summarize(
+    edits_mean = mean(n_events),
+    edits_median = median(n_events),
+    elapsed_mean = mean(elapsed)/1000,
+    n = n()
+  ) |>
+  group_by(problem) |>
+  mutate(
+    n_attempt_1 = n[attempt == 1],
+  ) |>
+  # pivot_wider(
+  #   id_cols=problem,
+  #   names_from=attempt,
+  #   values_from=c(n, edits_median, elapsed_mean),
+  #   names_glue = 'attempt_{.name}_{.value}'
+  # ) |>
+  ggplot() +
+  # geom_boxplot(
+  #   aes(as.factor(problem), n_events, fill=as.factor(attempt)),
+  #   outlier.shape=NA
+  # )
+  geom_point(
+    aes(problem, n/n_attempt_1),
+    data = \(x) filter(x, attempt != 1),
+    color = '#8da0cb', shape='+', size=6
+  ) +
+  
+  # geom_point(aes(problem, edits_median), color='#fc8d62', shape='square') +
+  
+  # geom_point(aes(problem, elapsed_mean), color='#66c2a5', shape='triangle') +
+  
+  # scale_y_continuous('Number of Edits / Number of Seconds', limits=c(0,200), sec.axis=sec_axis(\(x) x/200, 'Proportion')) +
+  # scale_y_continuous(expand=c(0,0)) +
+  
+  facet_wrap(vars(attempt)) +
+  labs(x='Problem', y='Proportion Attempted') +
+  theme_bw()
+
+ggsave('data/SecondThirdAttempt.png', width=800, height=400, units='px')
+ggsave('data/MedianEditsByAttempt.png', width=800, height=400, units='px')
+ggsave('data/MeanTimeByAttempt.png', width=800, height=400, units='px')
+
 
