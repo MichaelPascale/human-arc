@@ -1,5 +1,8 @@
 ---
-title: "ARC Eye Tracking"
+title: |
+  | H-ARC
+  | Abstraction and Reasoning Corpus
+  | Adapted for Human Behavior
 author: Michael Pascale
 date: now
 date-format: 'MMMM D, YYYY H:mm z'
@@ -7,13 +10,16 @@ knitr:
   opts_chunk:
     dev.args:
       png: {bg: "transparent"}
+execute:
+  cache: false
 format:
   revealjs:
-    theme: serif
+    theme: [serif, custom.scss]
+    slide-number: true
     editor: visual
 ---
 
-```{r}
+```{r, include=FALSE}
 library(dplyr)
 library(purrr)
 library(stringr)
@@ -87,7 +93,9 @@ ettheme <-
   )
 ```
 
-## Raw Fixation Data
+# Eyetracking: Raw Fixation Data
+
+## All Subjects
 
 ::: {layout-ncol="2" style="background-color: transparent;"}
 ```{r}
@@ -120,14 +128,12 @@ etdata |>
 ```
 :::
 
-## Subject-Level Plots
-
-<!--# Generate Slides for Each Problem -->
+# Eyetracking: Subject-Level Plots
 
 ```{r, output='asis'}
 for (i in sort(unique(etdata$problem))) {
-#i <- 10
-  cat('### Problem ', i, '\n\n')
+
+  cat('## Item ', i, '\n\n')
   
   # Subset eyetracking data...
   etdata_problem <-
@@ -167,7 +173,7 @@ for (i in sort(unique(etdata$problem))) {
       phase=='Train' | item==1
     ) |>
     mutate(phase = fct_relabel(phase, \(x) case_match(x, 'Train'~'E', 'Test'~'Q')),
-           io = fct_relabel(io, \(x) case_match(x, 'Input'~'In', 'Output'~'Out')),)
+           io = fct_relabel(io, \(x) case_match(x, 'Input'~'In', 'Output'~'Out')))
   
   plot_subject <- function (etdata_problem) { 
     ggplot(training_problem) +
@@ -185,7 +191,7 @@ for (i in sort(unique(etdata$problem))) {
     
     # colors from common.css
     scale_fill_manual(values=arcpal, guide='none') +
-        labs(x = NULL, y = NULL) +
+    labs(x = NULL, y = NULL) +
     ettheme +
     theme(
       axis.title = element_blank(),
@@ -194,14 +200,49 @@ for (i in sort(unique(etdata$problem))) {
     ) 
   }
   
-  # plot_subject(etdata_problem[etdata_problem$participant == etdata_problem$participant[1], ])
-  
   plot <-
     plot_grid(
       plotlist=lapply(split(etdata_problem, etdata_problem$participant), plot_subject),
       labels=paste('Participant', levels(etdata_problem$participant)),
       scale=0.9, label_size = 10
     )
+  
+  print(plot)
+  cat('\n\n')
+}
+```
+
+# Task Items
+
+```{r, output='asis'}
+for (i in sort(unique(training$task))) {
+
+  cat('## Item ', i, '\n\n')
+  
+  # Subset ARC problem train/test grids....
+  training_problem <-
+    training |>
+    filter(
+      task == i,
+      phase=='Train' | item==1
+    ) |>
+    mutate(phase = fct_relabel(phase, \(x) case_match(x, 'Train'~'E', 'Test'~'Q')),
+           io = fct_relabel(io, \(x) case_match(x, 'Input'~'In', 'Output'~'Out')))
+  
+  plot <- 
+    ggplot(training_problem) +
+    geom_raster(aes(y, -x, fill=val)) +
+    
+    facet_grid(interaction(phase, item, sep=' ', lex.order=TRUE) ~ io, switch='y') +
+    
+    scale_fill_manual(values=arcpal, guide='none') +
+    labs(x = NULL, y = NULL) +
+    ettheme +
+    theme(
+      axis.title = element_blank(),
+      plot.margin = unit(rep(0, 4), "null"),
+      panel.spacing = unit(0, "null")
+    ) 
   
   print(plot)
   cat('\n\n')
