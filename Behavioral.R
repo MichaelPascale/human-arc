@@ -7,14 +7,12 @@ library(stringr)
 library(lubridate)
 library(ggplot2)
 
-datapath <- 'data/ARC-data/MTurk/mturk subject data'
-# datapath <- 'data/ARC-data/BU online/subject_data/all-sub-raw'
-
-files <- dir(datapath, pattern='\\.json$', full.names = TRUE)
-
 # Read in a single behavioral JSON file.
 read_behavioral_json <- \(path) {
   x1 <- read_json(path)
+  
+  if (is.null(names(x1)) && length(x1) == 1)
+    x1 <- x1[[1]]
   
   time <- 
     strptime(
@@ -22,20 +20,25 @@ read_behavioral_json <- \(path) {
       tz=case_match(str_extract(x1$start_time, 'GMT.\\d+'), 'GMT-0400' ~ 'EDT', 'GMT-0500' ~ 'EST')
     )
   
-  x1$session |> map_dfr(\(session) {
-    
-    imap_dfr(session$attempts, \(attempt, index){
-      data.frame(
-        attempt=index,
-        n_events=length(attempt),
-        start=attempt[[1]]$time,
-        end=attempt[[length(attempt)]]$time,
-        first=attempt[[1]]$desc,
-        last=attempt[[length(attempt)]]$desc
-      )
-    }) |>
+  if (!hasName(x1, 'session'))
+    return(NULL)
+  
+  x1$session |>
+    map(\(session) {
+      imap(session$attempts, \(attempt, index){
+        data.frame(
+          attempt=index,
+          n_events=length(attempt),
+          start=attempt[[1]]$time,
+          end=attempt[[length(attempt)]]$time,
+          first=attempt[[1]]$desc,
+          last=attempt[[length(attempt)]]$desc
+        )
+      }) |>
+      list_rbind() |>
       mutate(problem=session$id)
-  }) |>
+    }) |>
+    list_rbind() |>
     mutate(
       subject=x1$subj_ID,
       elapsed= end - start,
@@ -45,10 +48,37 @@ read_behavioral_json <- \(path) {
     relocate(subject, problem)
 }
 
-read_behavioral_json(files[1])
+datapaths=c(
+  mturk='data/ARC-data/MTurk/mturk subject data',
+  bu='data/ARC-data/BU online/subject_data/all-sub-raw',
+  pilot1='data/ARC-eyetracking-pilot1/data',
+  pilot2='data/ARC-eyetracking/data'
+)
 
+files <- dir(datapaths, pattern='\\.json$', full.names = TRUE)
 
-behavioral <- map_dfr(files, read_behavioral_json)
+behavioral <-
+  map(files, read_behavioral_json, .progress=TRUE) |>
+  list_rbind() |>
+  tibble() |>
+  mutate(dataset=names(datapaths)[match(dirname(file), datapaths)])
+
+behavioral
+
+save(etdata, behavioral, subject_id_map, file='data/ET-Pilot.rda')
+which(datapaths |> str_detect('BU'))
+
+# behavioral |> 
+#   filter(dataset == 'pilot1') |>
+#   distinct(subject) |>
+#   arrange(subject) |>
+#   transmute(
+#     subject.number = row_number(),
+#     json.ID=subject
+#   ) |>
+#   write.csv(file.path(path, 'subIDs-NOTCHECKED.csv'), row.names=FALSE, na='')
+
+path2
 # write.csv(behavioral, 'data/MTurk-AttemptTiming-202312051210.csv', row.names=FALSE, na='')
 
 

@@ -8,15 +8,20 @@ date: now
 date-format: 'MMMM D, YYYY H:mm z'
 knitr:
   opts_chunk:
+    dev: svglite
     dev.args:
-      png: {bg: "transparent"}
+      svglite: {bg: "transparent"}
 execute:
   cache: false
+keep-yaml: false
+keep-md: true
 format:
   revealjs:
     theme: [serif, custom.scss]
     slide-number: true
     editor: visual
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r, include=FALSE}
@@ -38,7 +43,12 @@ arcpal <- list('#2B2B2B', '#248ADA', '#C71010', '#1FC719', '#F7DE28',
 names(arcpal) <- as.character(0:9)
 
 
-training <- readRDS('data/training-arc-behavioral-eye-tracking-202311081400.rds')
+training <- readRDS('data/training-arc-behavioral-eye-tracking-202311081400.rds') |>
+    filter(
+      phase=='Train' | item==1
+    ) |>
+    mutate(phase = fct_relabel(phase, \(x) case_match(x, 'Train'~'E', 'Test'~'Q')),
+           io = fct_relabel(io, \(x) case_match(x, 'Input'~'In', 'Output'~'Out')))
 
 path <- '/restricted/projectnb/cd-lab/Michael/human-arc/data/dataForQuan-202311071158'
 files <- dir(path, full.names = TRUE, pattern='sub\\d+\\.csv$', recursive = TRUE)
@@ -50,8 +60,8 @@ etdata <-
   mutate(
     .before=1,
     dataset='pilot1',
-    participant = as.factor(as.integer(str_extract(basename(file), pattern='(?<=sub)\\d+'))),
-    problem = as.factor(as.integer(str_extract(basename(file), pattern='(?<=prob)\\d+'))),
+    participant = interaction(dataset, as.integer(str_extract(basename(file), pattern='(?<=sub)\\d+')), sep='-'),
+    problem = as.integer(str_extract(basename(file), pattern='(?<=prob)\\d+')),
     csperformance = factor(str_extract(file, '\\w+(?=Performance)'), c('low', 'high'))
   ) |>
   relocate(file, .after=last_col()) |>
@@ -66,16 +76,25 @@ etdata2 <-
   mutate(
     .before=1,
     dataset='pilot2',
-    participant = as.factor(sub),
-    problem = as.factor(as.integer(str_extract(basename(file), pattern='(?<=prob)\\d+'))),
+    participant = interaction(dataset, sub, sep='-'),
+    problem = as.integer(str_extract(basename(file), pattern='(?<=prob)\\d+')),
     csperformance = NA
   ) |>
   select(-sub) |>
   relocate(file, .after=last_col()) |>
   tibble()
 
-# Looking solely at Pilot2 data for now...
-etdata <- etdata2
+
+etdata <- bind_rows(etdata, etdata2) |> mutate(across(problem, as.factor))
+
+subject_id_map <- 
+  rbind(
+    mutate(read.csv(file.path(path, 'subIDs.csv')), dataset='pilot1-'),
+    mutate(read.csv(file.path(path2, 'subIDs.csv')), dataset='pilot2-')
+  )|>
+  mutate(.keep='none', subject=json.ID, participant=as.factor(paste0(dataset, subject.number)))
+
+etdata <- left_join(etdata, subject_id_map) |> relocate(subject, .after=participant)
 
 ettheme <- 
   list(
@@ -95,14 +114,13 @@ ettheme <-
 
 # Eyetracking: Raw Fixation Data
 
-## All Subjects
+## Raw Fixations - All Subjects
 
 ::: {layout-ncol="2" style="background-color: transparent;"}
-```{r}
+```{r, eyetracking-all-subjects-screen, fig.cap='X-Y Screen Coordinates'}
 ggplot(etdata) +
   geom_path(aes(x, y), color='grey80', alpha=.2) +
-  geom_point(aes(x, y, shape=participant, color=scale(duration))) +
-  scale_shape_manual('Participant (Pilot)', values=1:8) +
+  geom_point(aes(x, y, color=scale(duration))) +
   scale_color_continuous('Duration (Z-Score)', type='viridis') +
   labs(
     x='X-Coordinate (Pixel)',
@@ -111,14 +129,13 @@ ggplot(etdata) +
   ettheme
 ```
 
-```{r}
+```{r, eyetracking-all-subjects-roi, fig.cap='By Region of Interest'}
 etdata |>
   filter(!is.nan(tileX)) |>
   ggplot() +
   facet_wrap(vars(ROI), ncol=3, strip.position='bottom') +
-  geom_path(aes(tileX, tileY), color='grey80', alpha=.2) +
-  geom_point(aes(tileX, tileY, shape=participant, color=scale(duration))) +
-  scale_shape_manual('Participant (Pilot)', values=1:8) +
+  geom_path(aes(tileX, -tileY), color='grey80', alpha=.2) +
+  geom_point(aes(tileX, -tileY, color=scale(duration))) +
   scale_color_continuous('Duration (Z-Score)', type='viridis') +
   labs(
     x='X-Coordinate (Tile)',
@@ -130,17 +147,50 @@ etdata |>
 
 # Eyetracking: Subject-Level Plots
 
-```{r, output='asis'}
+```{r, eyetracking-subject-plots, output='asis'}
+
+plot_subject <- function (etdata_problem, training_problem) {
+    
+  if (nrow(etdata_problem) > 0)
+    ggplot(training_problem) +
+    geom_raster(aes(y, -x, fill=val)) +
+
+    geom_path(data=etdata_problem,
+              aes(tileX, -tileY), color='grey80', alpha=.2) +
+    geom_point(data=etdata_problem,
+               aes(tileX, -tileY, color=scale(duration)),
+               shape='+') +
+    
+    scale_color_continuous('Duration (Z-Score)', type='viridis', guide='none') +
+    
+    facet_grid(interaction(phase, item, sep=' ', lex.order=TRUE) ~ io, switch='y') +
+    
+    # colors from common.css
+    scale_fill_manual(values=arcpal, guide='none') +
+    labs(x = NULL, y = NULL) +
+    ettheme +
+    theme(
+      axis.title = element_blank(),
+      plot.margin = unit(rep(0, 4), "null"),
+      panel.spacing = unit(0, "null")
+    )
+  else
+    ggplot() +
+    annotate("text", x = 0.5, y = 0.5, label = "No data.", size = 5) +
+    theme_void()
+}
+
 for (i in sort(unique(etdata$problem))) {
 
-  cat('## Item ', i, '\n\n')
+  cat('## Item ', i, ' - Fixations, By Subject\n\n')
   
   # Subset eyetracking data...
   etdata_problem <-
     etdata |>
+    drop_na(tileX, tileY) |>
     filter(
       problem == i,
-      ROI != 0
+      between(ROI, 1, 8)
     ) |>
     mutate(
       # Are we looking at an example or test grid?
@@ -162,51 +212,21 @@ for (i in sort(unique(etdata$problem))) {
           ROI %in% 7:8 ~ 1  # It's assumed that we have only the first test
         ) |>
         factor(1:6)
-    ) |>
-    drop_na(item, phase)
+    )
   
-  # Subset ARC problem train/test grids....
-  training_problem <-
-    training |>
-    filter(
-      task == i,
-      phase=='Train' | item==1
-    ) |>
-    mutate(phase = fct_relabel(phase, \(x) case_match(x, 'Train'~'E', 'Test'~'Q')),
-           io = fct_relabel(io, \(x) case_match(x, 'Input'~'In', 'Output'~'Out')))
-  
-  plot_subject <- function (etdata_problem) { 
-    ggplot(training_problem) +
-    geom_raster(aes(y, -x, fill=val)) +
-
-    geom_path(data=etdata_problem,
-              aes(tileX, -tileY), color='grey80', alpha=.2) +
-    geom_point(data=etdata_problem,
-               aes(tileX, -tileY, shape=participant, color=scale(duration))) +
-    
-    scale_shape_manual('Participant (Pilot)', values=1:8, guide='none') +
-    scale_color_continuous('Duration (Z-Score)', type='viridis', guide='none') +
-    
-    facet_grid(interaction(phase, item, sep=' ', lex.order=TRUE) ~ io, switch='y') +
-    
-    # colors from common.css
-    scale_fill_manual(values=arcpal, guide='none') +
-    labs(x = NULL, y = NULL) +
-    ettheme +
-    theme(
-      axis.title = element_blank(),
-      plot.margin = unit(rep(0, 4), "null"),
-      panel.spacing = unit(0, "null")
-    ) 
-  }
   
   plot <-
     plot_grid(
-      plotlist=lapply(split(etdata_problem, etdata_problem$participant), plot_subject),
-      labels=paste('Participant', levels(etdata_problem$participant)),
+      plotlist=lapply(
+        split(etdata_problem, etdata_problem$participant),
+        plot_subject,
+        filter(training, task == i)
+      ),
+      labels=levels(etdata_problem$participant),
       scale=0.9, label_size = 10
     )
   
+
   print(plot)
   cat('\n\n')
 }
@@ -217,20 +237,10 @@ for (i in sort(unique(etdata$problem))) {
 ```{r, output='asis'}
 for (i in sort(unique(training$task))) {
 
-  cat('## Item ', i, '\n\n')
+  cat('## H-ARC Item ', i, '\n\n')
   
-  # Subset ARC problem train/test grids....
-  training_problem <-
-    training |>
-    filter(
-      task == i,
-      phase=='Train' | item==1
-    ) |>
-    mutate(phase = fct_relabel(phase, \(x) case_match(x, 'Train'~'E', 'Test'~'Q')),
-           io = fct_relabel(io, \(x) case_match(x, 'Input'~'In', 'Output'~'Out')))
-  
-  plot <- 
-    ggplot(training_problem) +
+  plot <- {
+    ggplot(filter(training, task == i)) +
     geom_raster(aes(y, -x, fill=val)) +
     
     facet_grid(interaction(phase, item, sep=' ', lex.order=TRUE) ~ io, switch='y') +
@@ -242,7 +252,8 @@ for (i in sort(unique(training$task))) {
       axis.title = element_blank(),
       plot.margin = unit(rep(0, 4), "null"),
       panel.spacing = unit(0, "null")
-    ) 
+    )
+  }
   
   print(plot)
   cat('\n\n')
