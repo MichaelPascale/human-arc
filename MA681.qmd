@@ -1,0 +1,334 @@
+---
+title: "A Statistical Analysis of Human Subjects' Oculomotor Behavior During a Visual Problem Solving Task"
+subtitle: "MA681 Final Project - Fall 2023 Semester"
+author: "Michael Pascale"
+date: "19 December, 2023"
+format:
+  # html: default
+  pdf: 
+    df-print: kable
+    papersize: a4
+    margin-top: 2cm
+    margin-bottom: 2cm
+    margin-left: 2cm
+    margin-right: 2cm
+editor: visual
+execute:
+  cache: true
+  echo: false
+  output: false
+  include: false
+editor_options: 
+  chunk_output_type: console
+---
+
+## Abstract
+
+The ability to form generalized knowledge --- that is, knowledge which is abstracted and transferable across problems --- and reason using this knowledge is a component of human cognition that is both difficult to measure and difficult for artificial intelligence to reproduce. Presented here is a preliminary analysis of a behavioral task for use with human subjects which is intended to require reasoning and problem solving ability. Data were collected in a small pilot study (n=16), during which the eye movements of participants were recorded as they solved problems adapted from the Abstraction and Reasoning Challenge.
+
+```{r, setup}
+library(dplyr)
+library(tidyr)
+library(purrr)
+
+library(ggplot2)
+library(patchwork)
+
+# Set the color palette for plotting.
+arcpal <- list('#2B2B2B', '#248ADA', '#C71010', '#1FC719', '#F7DE28', 
+               '#878494', '#F954F2', '#EE6000', '#6B23A9', '#8B5A28')
+
+names(arcpal) <- as.character(0:9)
+
+# Read in the datasets.
+load('data/ET-Pilot.rda')
+training <- mutate(training, task=factor(task, 1:40)) |> drop_na(task)
+
+set.seed(200)
+```
+
+\newpage
+
+# Introduction
+
+Participants were presented and asked to solve a set of items adapted from the Abstraction and Reasoning Challenge[^1] (ARC) corpus (Chollet et al., 2020). This dataset consists of visual problem-solving tasks intended to be solvable by a computer algorithm. Produced by researchers at Google and posted as a public challenge on Kaggle in 2020, ARC is intended as a benchmark task against which artificial intelligence can be assessed for the ability to generalize, or to acquire new skills without preexisting knowledge through transfer of knowledge abstracted from other domains.
+
+[^1]: https://www.kaggle.com/c/abstraction-and-reasoning-challenge
+
+Previous work has assessed the performance of human subjects against a random subset of the ARC challenges. While these tasks were intended as an artificial intelligence benchmark, Johnson et al. (2021) created a web-based environment in which human participants (n=95) would attempt 40 of the ARC problems. On average, 83% of these problems were solved by the human participants in the Johnson et al. study.
+
+![An example item adapted from the ARC corpus. The participant is provided three example input/output pairs (E1-E3) and a query (Q1) input. They are expected to generalize knowledge gained from the examples to produce an output to the query. Their response is compared against the correct answer, shown here as Q1 Output.](data/example.png){fig-align="center"}
+
+The present research replicates Johnson et al. in a large sample collected on Amazon's Mechanical Turk (mTurk) and extends the body of literature with additional pilot sample in which eye-tracking data was collected. The addition of an eye-tracking channel will allow insight into the cognitive processes that underlie participants' problem solving and abstraction abilities. Presented here is a confirmatory analysis of the problem-solving behavior exhibited in Johnson et al. and exploratory analysis of oculomotor behavior as participants in the pilot sample solve 40 ARC tasks.
+
+## Data Description
+
+Eye-tracking data were collected in a small pilot sample (n=16) with the Eyelink 1000 camera system (SR Research Ltd., Ontario, Canada) at a sample rate of 1000Hz. Preprocessing steps were performed to extract *fixations* --- that is, periods during which the participant's eyes maintained a consistent gaze on a particular coordinate of the screen. With each fixation was reported the $(X, Y)$ coordinate and the duration of the fixation in seconds.
+
+# Statistical Analysis of Eye Tracking Data
+
+```{r, eda-attempts}
+attempts <-
+  behavioral  |>
+  
+  # Those participants with eyetracking data.
+  inner_join(subject_id_map) |>
+  
+  # Remove the calibration grids.
+  filter(problem <= 40) |>
+  
+  # Extract the number of attempts per problem.
+  summarize(.by=c(subject, problem), n_attempts=max(attempt), last = last[which.max(n_attempts)]) |>
+  
+  # Yes or no, was the participant successful on their first try.
+  mutate(first_try = last == 'submit' & n_attempts == 1)
+
+attempts_by_problem <-
+  attempts |>
+  summarize(.by=problem, prob_first_try=mean(first_try), median_attempts=median(n_attempts)) |>
+  arrange(problem)
+```
+
+Participants found the correct answer on their first attempt with an average probability of `r with(attempts_by_problem, sprintf('%.2f (SD=%.2f)', mean(prob_first_try), sd(prob_first_try)))` over the 40 problems.
+
+For the following we will use Task 1 (Figure 1) as a case study. Figure 2 shows us the raw probabilities and counts of fixation on a particular coordinate of Task 1.
+
+```{r, eda-fixation-counts}
+#| include: true
+#| output: true
+#| fig-width: 6
+#| fig-height: 6
+#| fig-cap: "Raw fixation counts for Task 1."
+
+grid_sizes <-
+  distinct(training, task, x, y) |>
+  summarise(.by=task, across(x:y, n_distinct), max=max(x,y))
+
+
+
+dimens <-  grid_sizes[grid_sizes[['task']] == 1, 'max']
+
+ d <- filter(etdata, problem == 1) |>
+  filter(ROI %in% 1:8) |>
+  drop_na(tileX, tileY) |>
+  mutate(
+    # Are we looking at an example or test grid?
+    phase = 
+      paste0(
+        if_else(between(ROI, 1, 6), 'E', 'Query'),
+        case_when(
+          ROI %in% 1:2 ~ '1',
+          ROI %in% 3:4 ~ '2',
+          ROI %in% 5:6 ~ '3',
+          ROI %in% 7:8 ~ ''
+        )
+      ),
+    
+    # Are we looking at an input grid or an output grid?
+    io = 
+      case_when(ROI %in% c(1,3,5,7) ~ 0, .default=1) |>
+      factor(0:1, c('In', 'Out')),
+    
+    across(tileX:tileY, \(x) factor(x, seq_len(dimens)))
+  ) |>
+  count(phase, io, tileX, tileY, .drop=FALSE) |>
+  mutate(.by=c(phase, io), grid_total=sum(n), grid_prob=n/grid_total) |>
+  mutate(across(tileX:tileY, as.integer), overall_prob=n/sum(n))
+
+
+
+
+  
+p <- ggplot(d, aes(tileY, -tileX)) +
+  facet_grid(io ~ phase, switch='y')
+
+# plot customizations common to both plots
+(
+  (p + geom_raster(aes(fill=grid_prob)) +
+    scale_fill_continuous('Fixation Probability\n(Within Grid)', type='viridis')
+   ) /
+  (p + geom_raster(aes(fill=overall_prob)) +
+    scale_fill_continuous('Fixation Probability\n(Overall)', type='viridis')
+   )
+) * list(
+  geom_text(aes(label=n), size = 6 / .pt),
+  geom_text(aes(label=paste(grid_total, 'Total Fixations')), x=dimens+.5, y=-dimens-1, hjust=1, check_overlap=TRUE, size = 6 / .pt),
+  
+  labs(x = NULL, y = NULL),
+  scale_x_discrete(),
+  scale_y_discrete(),
+  coord_fixed(clip='off'),
+  theme_minimal(),
+  theme(plot.margin = unit(rep(0, 4), "null"), panel.spacing = unit(0, "null"))
+)
+```
+
+This schema will be applied in an information theoretic analysis of the fixations on a per problem basis.
+
+## Hypothesis
+
+Per Shannon (1948), entropy is a measure which quantifies uncertainty in that it expresses how surprising or unpredictable any given result might be to an uncertain observer. Thus, information is cleanly defined as data with the potential to reduce entropy in the observer's model of the world, and a piece of information may be considered valuable to the observer according to the magnitude of potential entropy reduction.
+
+We will use gaze *entropy* as a measure of the organizational efficiency of the participant's eye movements during problem solving, and it is hypothesized that the entropy exhibited in an individual participants' gaze will be predictive of their success on the first attempt at solving an individual task, as an organized gaze is assumed to be suggestive of an organized and less error prone cognitive approach.
+
+The Shannon Entropy is thus defined...
+
+$$ H(\Omega) = - \sum_{i=1}^{|\Omega|} p_{\omega_i}\ log_2 (p_{\omega_i})\ \ \forall\ \omega_i \in \Omega $$
+
+where $p_i$ is the probability of event $i$. We can get a sense for the behavior of this function by plotting $-p\ log_2\ p-(1-p)\ log_2(1-p)$, the entropy over two events with probabilities $p$ and $1-p$.
+
+```{r, include=TRUE, output=TRUE, fig.width=2, fig.height=2, fig.align='center'}
+par(mar = rep(0,4), pty = "s", pin = c(1, 1))
+plot(
+  \(p) - p * log2(p) - (1-p) * log2(1-p), 
+  col='firebrick', lwd=4,
+  asp=1, xaxs='i', yaxs='i', ann=FALSE, 
+  xaxp=c(0, 1, 2), yaxp=c(0, 1, 2)
+)
+```
+
+It is reasonable to force that $log_2(p_i = 0) = 0$ such that an event which does not occur does not contribute to the entropy. This can be justified by the fact that $\lim_{p \to 0} log(p) = 0$.
+
+In this case, our sample space $\Omega$ will be defined on a per-problem basis as the Cartesian plane of each task grid that appears on the screen.
+
+## Method and Model Selection
+
+We will calculate the Shannon Entropy for each subject, for each problem, for each example, on the probability distribution shown in Figure 1A. We will use only the participants fixations on the Example grids (E1-E3) as fixations on the query grid are contaminated by the participants' editing of their solution.
+
+```{r}
+da <- map_dfr(1:40, \(i) {
+
+
+dimens <-  grid_sizes[grid_sizes[['task']] == i, 'max']
+
+ filter(etdata, problem == i) |>
+  filter(ROI %in% 1:8) |>
+  drop_na(tileX, tileY) |>
+  mutate(
+    # Are we looking at an example or test grid?
+    phase = 
+      paste0(
+        if_else(between(ROI, 1, 6), 'E', 'Query'),
+        case_when(
+          ROI %in% 1:2 ~ '1',
+          ROI %in% 3:4 ~ '2',
+          ROI %in% 5:6 ~ '3',
+          ROI %in% 7:8 ~ ''
+        )
+      ),
+    
+    # Are we looking at an input grid or an output grid?
+    io = 
+      case_when(ROI %in% c(1,3,5,7) ~ 0, .default=1) |>
+      factor(0:1, c('In', 'Out')),
+    
+    across(tileX:tileY, \(x) factor(x, seq_len(dimens)))
+  ) |>
+  count(subject, phase, io, tileX, tileY, .drop=FALSE) |>
+  mutate(.by=c(phase, io), grid_total=sum(n), grid_prob=n/grid_total) |>
+  mutate(across(tileX:tileY, as.integer), overall_prob=n/sum(n)) |>
+  mutate(.before=1, problem=i, )
+})
+
+da |>
+  left_join(mutate(.keep='none', grid_sizes, problem=as.integer(task), w=x,h=y)) |>
+  filter(stringr::str_detect(phase, '^E')) |>
+  mutate(
+    .by=c(subject, problem, phase),
+    area=w[1]*h[1],
+    p = n/area + .00000001, # add tiny constant to avoid NaNs
+    sls = p*log2(p)
+  ) |>
+  summarize(
+        .by=c(subject, problem, phase),
+        H=-sum(p*log2(p))
+  ) |>
+  pivot_wider(names_from=phase, values_from=H) |>
+  left_join(attempts) |>
+  mutate(.keep='none', Subject=subject, `Task Item`=problem, `E1 Entropy`=E1, `E2 Entropy`=E2, `E3 Entropy`=E3, `Correct On First Try`=as.integer(first_try)) -> data
+```
+
+```{r, include=TRUE, output=TRUE, echo=TRUE}
+head(data)
+```
+
+Given success on first try as a binary outcome, with the three gaze entropies as continuous predictors, we will model our data using a multivariate logistic regression. We will also include in our model whether or not the participant looked at each of the Example grids. We choose to include this predictor because it is possible that a participant might look, for example, only at the first grid, and rush to a solution before taking in all of the information.
+
+```{r, include=TRUE, output=TRUE, echo=TRUE}
+names(data) <- c('subject', 'item', 'e1', 'e2', 'e3', 'correct')
+
+model <- lm(correct ~ e1 + e2 + e3, data)
+
+summary(model)
+
+library(lme4)
+
+model <- glmer(correct ~ e1 + e2 + e3 + (1|item), data, binomial)
+```
+
+\newpage
+
+# Bibliography
+
+-   Chollet, F., Tong, K., Reade, W., Elliott, J. (2020). *Abstraction and Reasoning Challenge*. Kaggle. <https://kaggle.com/competitions/abstraction-and-reasoning-challenge>
+
+-   Johnson, A., Vong, W. K., Lake, B. M., & Gureckis, T. M. (2021). *Fast and flexible: Human program induction in abstract reasoning tasks* (arXiv:2103.05823). arXiv. <https://doi.org/10.48550/arXiv.2103.05823>
+
+-   Kucharský, Š., Visser, I., Truțescu, G. O., Laurence, P. G., Zaharieva, M., & Raijmakers, M. E. J. (2020). Cognitive strategies revealed by clustering eye movement transitions. *Journal of eye movement research*, *13*(1). <https://doi.org/10.16910/jemr.13.1.1>
+
+-   Shannon, C. E. (1948). A Mathematical Theory of Communication. *Bell System Technical Journal*, 27, 379--423.
+
+\newpage
+
+# Appendix A - Full Item Set
+
+```{r, appendix-all-tasks}
+#| include: true
+#| output: true
+#| fig-width: 6.5
+#| fig-height: 7
+#| fig-cap: "The subset of 40 ARC items completed by study participants."
+
+plot_task_item <- function (item) {
+    dimen <- with(item, max(x,y)) + 1
+    
+    ggplot(item) +
+    geom_raster(aes(y, -x, fill=val)) +
+    
+    facet_grid(interaction(phase, item, sep=' ', lex.order=TRUE) ~ io, switch='y') +
+    
+    scale_fill_manual(values=arcpal, guide='none') +
+    labs(x = NULL, y = NULL) +
+    xlim(0, dimen) + ylim(0, -dimen) +
+    coord_fixed(1, c(1, dimen-1), c(-1, -dimen+1),FALSE)+
+    theme_bw() +
+    theme(
+      axis.title = element_blank(),
+      plot.margin = unit(rep(0, 4), "null"),
+      panel.spacing = unit(0, "null"),
+      panel.background = element_rect(fill='transparent', color=NA),
+      plot.background = element_rect(fill='transparent', color=NA),
+      legend.background = element_rect(fill='transparent', color=NA),
+      legend.key = element_rect(fill='transparent', color=NA),
+      axis.ticks = element_blank(),
+      axis.text = element_blank(),
+      legend.justification = c(0, 1),
+      strip.text = element_text(size=6)
+    )
+}
+
+lapply(split(training, training$task), plot_task_item) |>
+  wrap_plots(tag_level='keep', ncol=5) +
+  plot_annotation(tag_levels='1')
+```
+
+\newpage
+
+# Appendix B - Per Item Accuracy
+
+```{r}
+#| include: true
+#| output: true
+attempts_by_problem |> 
+  mutate(.keep='none', `Task Item`=problem, `Pr(Correct First Try)`=sprintf('%.2f', prob_first_try), `Median(# Attempts)`=sprintf('%.1f', median_attempts))
+```
