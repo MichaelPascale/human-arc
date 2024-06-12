@@ -1,30 +1,9 @@
 ---
-title: "A Statistical Analysis of Human Subjects' Oculomotor Behavior During a Visual Problem Solving Task"
-subtitle: "MA681 Final Project - Fall 2023 Semester"
-author: "Michael Pascale"
-date: "19 December, 2023"
 format:
-  # html: default
-  pdf: 
-    df-print: kable
-    papersize: a4
-    margin-top: 2cm
-    margin-bottom: 2cm
-    margin-left: 2cm
-    margin-right: 2cm
-editor: visual
+  typst: default
 execute:
   cache: true
-  echo: false
-  output: false
-  include: false
-editor_options: 
-  chunk_output_type: console
 ---
-
-## Abstract
-
-The ability to form generalized knowledge --- that is, knowledge which is abstracted and transferable across problems --- and reason using this knowledge is a component of human cognition that is both difficult to measure and difficult for artificial intelligence to reproduce. Presented here is a preliminary analysis of a behavioral task for use with human subjects which is intended to require reasoning and problem solving ability. Data were collected in a small pilot study (n=16), during which the eye movements of participants were recorded as they solved problems adapted from the Abstraction and Reasoning Challenge.
 
 ```{r, setup}
 library(dplyr)
@@ -46,26 +25,6 @@ training <- mutate(training, task=factor(task, 1:40)) |> drop_na(task)
 
 set.seed(200)
 ```
-
-\newpage
-
-# Introduction
-
-Participants were presented and asked to solve a set of items adapted from the Abstraction and Reasoning Challenge[^1] (ARC) corpus (Chollet et al., 2020). This dataset consists of visual problem-solving tasks intended to be solvable by a computer algorithm. Produced by researchers at Google and posted as a public challenge on Kaggle in 2020, ARC is intended as a benchmark task against which artificial intelligence can be assessed for the ability to generalize, or to acquire new skills without preexisting knowledge through transfer of knowledge abstracted from other domains.
-
-[^1]: https://www.kaggle.com/c/abstraction-and-reasoning-challenge
-
-Previous work has assessed the performance of human subjects against a random subset of the ARC challenges. While these tasks were intended as an artificial intelligence benchmark, Johnson et al. (2021) created a web-based environment in which human participants (n=95) would attempt 40 of the ARC problems. On average, 83% of these problems were solved by the human participants in the Johnson et al. study.
-
-![An example item adapted from the ARC corpus. The participant is provided three example input/output pairs (E1-E3) and a query (Q1) input. They are expected to generalize knowledge gained from the examples to produce an output to the query. Their response is compared against the correct answer, shown here as Q1 Output.](data/example.png){fig-align="center"}
-
-The present research replicates Johnson et al. in a large sample collected on Amazon's Mechanical Turk (mTurk) and extends the body of literature with additional pilot sample in which eye-tracking data was collected. The addition of an eye-tracking channel will allow insight into the cognitive processes that underlie participants' problem solving and abstraction abilities. Presented here is a confirmatory analysis of the problem-solving behavior exhibited in Johnson et al. and exploratory analysis of oculomotor behavior as participants in the pilot sample solve 40 ARC tasks.
-
-## Data Description
-
-Eye-tracking data were collected in a small pilot sample (n=16) with the Eyelink 1000 camera system (SR Research Ltd., Ontario, Canada) at a sample rate of 1000Hz. Preprocessing steps were performed to extract *fixations* --- that is, periods during which the participant's eyes maintained a consistent gaze on a particular coordinate of the screen. With each fixation was reported the $(X, Y)$ coordinate and the duration of the fixation in seconds.
-
-# Statistical Analysis of Eye Tracking Data
 
 ```{r, eda-attempts}
 attempts <-
@@ -91,11 +50,10 @@ attempts_by_problem <-
 
 Participants found the correct answer on their first attempt with an average probability of `r with(attempts_by_problem, sprintf('%.2f (SD=%.2f)', mean(prob_first_try), sd(prob_first_try)))` over the 40 problems.
 
-For the following we will use Task 1 (Figure 1) as a case study. Figure 2 shows us the raw probabilities and counts of fixation on a particular coordinate of Task 1.
+For the following we will use Task 1 (@fig-task-1) as a case study. @fig-pilot-fixation-prob shows us the raw probabilities and counts of fixation on a particular coordinate of Task 1.
 
 ```{r, eda-fixation-counts}
-#| include: true
-#| output: true
+#| label: fig-pilot-fixation-prob
 #| fig-width: 6
 #| fig-height: 6
 #| fig-cap: "Raw fixation counts for Task 1."
@@ -135,10 +93,8 @@ dimens <-  grid_sizes[grid_sizes[['task']] == 1, 'max']
   mutate(.by=c(phase, io), grid_total=sum(n), grid_prob=n/grid_total) |>
   mutate(across(tileX:tileY, as.integer), overall_prob=n/sum(n))
 
-
-
-
-  
+ 
+ 
 p <- ggplot(d, aes(tileY, -tileX)) +
   facet_grid(io ~ phase, switch='y')
 
@@ -165,35 +121,9 @@ p <- ggplot(d, aes(tileY, -tileX)) +
 
 This schema will be applied in an information theoretic analysis of the fixations on a per problem basis.
 
-## Hypothesis
-
-Per Shannon (1948), entropy is a measure which quantifies uncertainty in that it expresses how surprising or unpredictable any given result might be to an uncertain observer. Thus, information is cleanly defined as data with the potential to reduce entropy in the observer's model of the world, and a piece of information may be considered valuable to the observer according to the magnitude of potential entropy reduction.
-
-We will use gaze *entropy* as a measure of the organizational efficiency of the participant's eye movements during problem solving, and it is hypothesized that the entropy exhibited in an individual participants' gaze will be predictive of their success on the first attempt at solving an individual task, as an organized gaze is assumed to be suggestive of an organized and less error prone cognitive approach.
-
-The Shannon Entropy is thus defined...
-
-$$ H(\Omega) = - \sum_{i=1}^{|\Omega|} p_{\omega_i}\ log_2 (p_{\omega_i})\ \ \forall\ \omega_i \in \Omega $$
-
-where $p_i$ is the probability of event $i$. We can get a sense for the behavior of this function by plotting $-p\ log_2\ p-(1-p)\ log_2(1-p)$, the entropy over two events with probabilities $p$ and $1-p$.
-
-```{r, include=TRUE, output=TRUE, fig.width=2, fig.height=2, fig.align='center'}
-par(mar = rep(0,4), pty = "s", pin = c(1, 1))
-plot(
-  \(p) - p * log2(p) - (1-p) * log2(1-p), 
-  col='firebrick', lwd=4,
-  asp=1, xaxs='i', yaxs='i', ann=FALSE, 
-  xaxp=c(0, 1, 2), yaxp=c(0, 1, 2)
-)
-```
-
-It is reasonable to force that $log_2(p_i = 0) = 0$ such that an event which does not occur does not contribute to the entropy. This can be justified by the fact that $\lim_{p \to 0} log(p) = 0$.
-
-In this case, our sample space $\Omega$ will be defined on a per-problem basis as the Cartesian plane of each task grid that appears on the screen.
-
 ## Method and Model Selection
 
-We will calculate the Shannon Entropy for each subject, for each problem, for each example, on the probability distribution shown in Figure 1A. We will use only the participants fixations on the Example grids (E1-E3) as fixations on the query grid are contaminated by the participants' editing of their solution.
+We will calculate the Shannon Entropy for each subject, for each problem, for each example, on the probability distribution shown in @fig-pilot-fixation-prob. We will use only the participants fixations on the Example grids (E1-E3) as fixations on the query grid are contaminated by the participants' editing of their solution.
 
 ```{r}
 da <- map_dfr(1:40, \(i) {
@@ -248,13 +178,13 @@ da |>
   mutate(.keep='none', Subject=subject, `Task Item`=problem, `E1 Entropy`=E1, `E2 Entropy`=E2, `E3 Entropy`=E3, `Correct On First Try`=as.integer(first_try)) -> data
 ```
 
-```{r, include=TRUE, output=TRUE, echo=TRUE}
+```{r, echo=TRUE}
 head(data)
 ```
 
 Given success on first try as a binary outcome, with the three gaze entropies as continuous predictors, we will model our data using a multivariate logistic regression. We will also include in our model whether or not the participant looked at each of the Example grids. We choose to include this predictor because it is possible that a participant might look, for example, only at the first grid, and rush to a solution before taking in all of the information.
 
-```{r, include=TRUE, output=TRUE, echo=TRUE}
+```{r}
 names(data) <- c('subject', 'item', 'e1', 'e2', 'e3', 'correct')
 
 model <- lm(correct ~ e1 + e2 + e3, data)
@@ -264,19 +194,10 @@ summary(model)
 library(lme4)
 
 model <- glmer(correct ~ e1 + e2 + e3 + (1|item), data, binomial)
+
+summary(model)
 ```
 
-\newpage
-
-# Bibliography
-
--   Chollet, F., Tong, K., Reade, W., Elliott, J. (2020). *Abstraction and Reasoning Challenge*. Kaggle. <https://kaggle.com/competitions/abstraction-and-reasoning-challenge>
-
--   Johnson, A., Vong, W. K., Lake, B. M., & Gureckis, T. M. (2021). *Fast and flexible: Human program induction in abstract reasoning tasks* (arXiv:2103.05823). arXiv. <https://doi.org/10.48550/arXiv.2103.05823>
-
--   Kucharský, Š., Visser, I., Truțescu, G. O., Laurence, P. G., Zaharieva, M., & Raijmakers, M. E. J. (2020). Cognitive strategies revealed by clustering eye movement transitions. *Journal of eye movement research*, *13*(1). <https://doi.org/10.16910/jemr.13.1.1>
-
--   Shannon, C. E. (1948). A Mathematical Theory of Communication. *Bell System Technical Journal*, 27, 379--423.
 
 \newpage
 

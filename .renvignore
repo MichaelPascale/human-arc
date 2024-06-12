@@ -1,0 +1,4 @@
+# Ignore all data files and parse only R or Quarto documents
+*
+!**/*.qmd
+!*.R

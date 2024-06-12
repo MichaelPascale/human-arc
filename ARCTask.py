@@ -14,8 +14,6 @@ class ARCTask():
       self.train = [np.stack([np.array(pair['input']), np.array(pair['output'])]) for pair in self._data['train']]
       self.test = [np.stack([np.array(pair['input']), np.array(pair['output'])]) for pair in self._data['test']]
       
-      print('initialized with %s' % filename)
-
   def show(self):
     fig, axs = plt.subplots(2, len(self.train) + len(self.test), figsize=(4,2), dpi=600, layout='constrained')
     

@@ -1,0 +1,96 @@
+---
+title: "Oculomotor Signatures of Abstract Reasoning"
+subtitle: "MA681 Final Project - Fall 2023 Semester"
+author:
+    name: Michael Pascale
+    degrees: B.Sc.
+    orcid: '0000-0003-1689-0557'
+    email: 'mpascale@bu.edu'
+    affiliations:
+      - name: Boston University
+        department: Department of Psychological and Brain Sciences
+        group: Cognition and Decision Lab
+date: last-modified
+date-format: 'MMMM D, YYYY [at] HH:mm:ss z'
+bibliography: ref.bib
+bibliographystyle: apa
+abstract: |
+  The ability to form generalized knowledge --- that is, knowledge which is abstracted and transferable across problems --- and reason using this knowledge is a component of human cognition that is both difficult to measure and difficult for artificial intelligence to reproduce. Presented here is a preliminary analysis of a behavioral task for use with human subjects which is intended to require reasoning and problem solving ability. Data were collected in a small pilot study (n=16), during which the eye movements of participants were recorded as they solved problems adapted from the Abstraction and Reasoning Challenge.
+format:
+  # html: default
+  typst: default
+editor: visual
+execute:
+  cache: true
+  echo: false
+  warning: false
+editor_options: 
+  chunk_output_type: console
+---
+
+\newpage
+
+# Introduction
+
+Participants were presented and asked to solve a set of items adapted from the Abstraction and Reasoning Challenge[^1] (ARC) corpus [@chollet_abstraction_2020]. This dataset consists of visual problem-solving tasks intended to be solvable by a computer algorithm. Produced by researchers at Google and posted as a public challenge on Kaggle in 2020, ARC is intended as a benchmark task against which artificial intelligence can be assessed for the ability to generalize, or to acquire new skills without preexisting knowledge through transfer of knowledge abstracted from other domains.
+
+[^1]: https://www.kaggle.com/c/abstraction-and-reasoning-challenge
+
+Previous work has assessed the performance of human subjects against a random subset of the ARC challenges. While these tasks were intended as an artificial intelligence benchmark, @johnson_fast_2021 created a web-based environment in which human participants (n=95) would attempt 40 of the ARC problems. On average, 83% of these problems were solved by the human participants in the Johnson et al. study.
+
+```{python}
+#| label: fig-task-1
+#| fig-cap: An example item adapted from the ARC corpus. The participant is provided three example input/output pairs (E1-E3) and a query (Q1) input. They are expected to generalize knowledge gained from the examples to produce an output to the query. Their response is compared against the correct answer, shown here as Q1 Output.
+#| height: 2in
+import os
+from ARCTask import ARCTask
+dir = 'data/ARC-eyetracking/tasks'
+
+tasks = {}
+for filename in os.listdir(dir):
+  filepath = os.path.join(dir, filename)
+  try:
+    tasks[filename] = ARCTask(filepath)
+  except:
+    print('ERROR: Could not process file %s' % filepath)
+  
+tasks['1.json'].show()
+```
+
+The present research replicates Johnson et al. in a large sample collected on Amazon's Mechanical Turk (mTurk) and extends the body of literature with additional pilot sample in which eye-tracking data was collected. The addition of an eye-tracking channel will allow insight into the cognitive processes that underlie participants' problem solving and abstraction abilities. Presented here is a confirmatory analysis of the problem-solving behavior exhibited in Johnson et al. and exploratory analysis of oculomotor behavior as participants in the pilot sample solve 40 ARC tasks.
+
+## Dataset Description
+
+Eye-tracking data were collected in a small pilot sample (n=16) with the Eyelink 1000 camera system (SR Research Ltd., Ontario, Canada) at a sample rate of 1000Hz. Preprocessing steps were performed to extract fixation $(X, Y)$ coordinates and the duration in seconds.
+
+## Information Theoretic Approach
+
+Per @shannon_mathematical_1948, entropy is a measure which quantifies uncertainty in that it expresses how surprising or unpredictable any given result might be to an uncertain observer. Thus, information is cleanly defined as data with the potential to reduce entropy in the observer's model of the world, and a piece of information may be considered valuable to the observer according to the magnitude of potential entropy reduction.
+
+We will use gaze *entropy* as a measure of the organizational efficiency of the participant's eye movements during problem solving, and it is hypothesized that the entropy exhibited in an individual participants' gaze will be predictive of their success on the first attempt at solving an individual task, as an organized gaze is assumed to be suggestive of an organized and less error prone cognitive approach.
+
+The Shannon Entropy is thus defined...
+
+$$ H(\Omega) = - \sum_{i=1}^{|\Omega|} p_{\omega_i}\ log_2 (p_{\omega_i})\ \ \forall\ \omega_i \in \Omega $$
+
+where $p_i$ is the probability of event $i$.
+
+```{r}
+#| fig-cap: We can get a sense for the behavior of the Shannon Entropy by plotting $-p\ log_2\ p-(1-p)\ log_2(1-p)$, the entropy over two events with probabilities $p$ and $1-p$.
+par(mar = rep(0,4), pty = "s", pin = c(1, 1))
+plot(
+  \(p) - p * log2(p) - (1-p) * log2(1-p), 
+  col='firebrick', lwd=4,
+  asp=1, xaxs='i', yaxs='i', ann=FALSE, 
+  xaxp=c(0, 1, 2), yaxp=c(0, 1, 2)
+)
+```
+
+It is reasonable to force that $log_2(p_i = 0) = 0$ such that an event which does not occur does not contribute to the entropy. This can be justified by the fact that $\lim_{p \to 0} log(p) = 0$.
+
+In this case, our sample space $\Omega$ will be defined on a per-problem basis as the Cartesian plane of each task grid that appears on the screen.
+
+# Pilot Study
+
+{{< include Section01-Pilot.qmd >}}
+
