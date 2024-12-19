@@ -22,6 +22,7 @@ format:
     editor: visual
 editor_options: 
   chunk_output_type: console
+output-dir: artifacts/eyetracking/
 ---
 
 ```{r, include=FALSE}
@@ -33,6 +34,8 @@ library(jsonlite)
 library(tidyr)
 library(cowplot)
 library(forcats)
+
+source('Plotting.R')
 
 # Original colors were changed.
 # arcpal <- list('#000000', '#0074D9', '#FF4136', '#2ECC40', '#FFDC00',
@@ -145,44 +148,14 @@ etdata |>
 ```
 :::
 
-# Eyetracking: Subject-Level Plots
+```{r, output='asis'}
+for (i in sort(unique(training$task))) {
 
-```{r, eyetracking-subject-plots, output='asis'}
-
-plot_subject <- function (etdata_problem, training_problem) {
-    
-  if (nrow(etdata_problem) > 0)
-    ggplot(training_problem) +
-    geom_raster(aes(y, -x, fill=val)) +
-
-    geom_path(data=etdata_problem,
-              aes(tileX, -tileY), color='grey80', alpha=.2) +
-    geom_point(data=etdata_problem,
-               aes(tileX, -tileY, color=scale(duration)),
-               shape='+') +
-    
-    scale_color_continuous('Duration (Z-Score)', type='viridis', guide='none') +
-    
-    facet_grid(interaction(phase, item, sep=' ', lex.order=TRUE) ~ io, switch='y') +
-    
-    # colors from common.css
-    scale_fill_manual(values=arcpal, guide='none') +
-    labs(x = NULL, y = NULL) +
-    ettheme +
-    theme(
-      axis.title = element_blank(),
-      plot.margin = unit(rep(0, 4), "null"),
-      panel.spacing = unit(0, "null")
-    )
-  else
-    ggplot() +
-    annotate("text", x = 0.5, y = 0.5, label = "No data.", size = 5) +
-    theme_void()
-}
-
-for (i in sort(unique(etdata$problem))) {
-
-  cat('## Item ', i, ' - Fixations, By Subject\n\n')
+  cat('# Item ', i, '\n\n')
+  print(plot_task(training, i))
+  cat('\n\n')
+  
+   cat('## Item ', i, ' - Fixations, By Subject\n\n')
   
   # Subset eyetracking data...
   etdata_problem <-
@@ -227,34 +200,6 @@ for (i in sort(unique(etdata$problem))) {
     )
   
 
-  print(plot)
-  cat('\n\n')
-}
-```
-
-# Task Items
-
-```{r, output='asis'}
-for (i in sort(unique(training$task))) {
-
-  cat('## H-ARC Item ', i, '\n\n')
-  
-  plot <- {
-    ggplot(filter(training, task == i)) +
-    geom_raster(aes(y, -x, fill=val)) +
-    
-    facet_grid(interaction(phase, item, sep=' ', lex.order=TRUE) ~ io, switch='y') +
-    
-    scale_fill_manual(values=arcpal, guide='none') +
-    labs(x = NULL, y = NULL) +
-    ettheme +
-    theme(
-      axis.title = element_blank(),
-      plot.margin = unit(rep(0, 4), "null"),
-      panel.spacing = unit(0, "null")
-    )
-  }
-  
   print(plot)
   cat('\n\n')
 }

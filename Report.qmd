@@ -1,6 +1,5 @@
 ---
 title: "Oculomotor Signatures of Abstract Reasoning"
-subtitle: "MA681 Final Project - Fall 2023 Semester"
 author:
     name: Michael Pascale
     degrees: B.Sc.
@@ -12,8 +11,9 @@ author:
         group: Cognition and Decision Lab
 date: last-modified
 date-format: 'MMMM D, YYYY [at] HH:mm:ss z'
+citeproc: true
 bibliography: ref.bib
-bibliographystyle: apa
+csl: apa.csl
 abstract: |
   The ability to form generalized knowledge --- that is, knowledge which is abstracted and transferable across problems --- and reason using this knowledge is a component of human cognition that is both difficult to measure and difficult for artificial intelligence to reproduce. Presented here is a preliminary analysis of a behavioral task for use with human subjects which is intended to require reasoning and problem solving ability. Data were collected in a small pilot study (n=16), during which the eye movements of participants were recorded as they solved problems adapted from the Abstraction and Reasoning Challenge.
 format:
@@ -26,6 +26,7 @@ execute:
   warning: false
 editor_options: 
   chunk_output_type: console
+output-dir: artifacts/report/
 ---
 
 \newpage
@@ -43,18 +44,19 @@ Previous work has assessed the performance of human subjects against a random su
 #| fig-cap: An example item adapted from the ARC corpus. The participant is provided three example input/output pairs (E1-E3) and a query (Q1) input. They are expected to generalize knowledge gained from the examples to produce an output to the query. Their response is compared against the correct answer, shown here as Q1 Output.
 #| height: 2in
 import os
-from ARCTask import ARCTask
+import ARCTask
+from matplotlib import pyplot as plt
 dir = 'data/ARC-eyetracking/tasks'
 
 tasks = {}
 for filename in os.listdir(dir):
   filepath = os.path.join(dir, filename)
   try:
-    tasks[filename] = ARCTask(filepath)
+    tasks[filename] = ARCTask.ARCTask(filepath)
   except:
     print('ERROR: Could not process file %s' % filepath)
   
-tasks['1.json'].show()
+tasks['1.json'].show(False)
 ```
 
 The present research replicates Johnson et al. in a large sample collected on Amazon's Mechanical Turk (mTurk) and extends the body of literature with additional pilot sample in which eye-tracking data was collected. The addition of an eye-tracking channel will allow insight into the cognitive processes that underlie participants' problem solving and abstraction abilities. Presented here is a confirmatory analysis of the problem-solving behavior exhibited in Johnson et al. and exploratory analysis of oculomotor behavior as participants in the pilot sample solve 40 ARC tasks.
@@ -90,7 +92,39 @@ It is reasonable to force that $log_2(p_i = 0) = 0$ such that an event which doe
 
 In this case, our sample space $\Omega$ will be defined on a per-problem basis as the Cartesian plane of each task grid that appears on the screen.
 
+## Relative Entropy
+
+We can adapt the Shannon Entropy to two dimensions by treating the unique pixel colors as a probability distribution.
+
+```{python}
+import plotnine as pl
+# plt.matshow(tasks['1.json'].train[0][0])
+# plt.show()
+plt.figure()
+plt.hist(tasks['1.json'].train[0][1].ravel())
+plt.show()
+```
+
+The Kullback–Leibler (KL) divergence between the distribution
+
 # Pilot Study
 
 {{< include Section01-Pilot.qmd >}}
 
+\newpage
+
+# Appendix A - Full Item Set
+
+```{python}
+#| label: appendix-full-arc-sets
+#| layout-nrow: 10
+for name, task in sorted(tasks.items(), key=lambda pair: int(pair[0].split('.')[0])):
+  task.show()
+```
+
+\newpage
+
+# References
+
+::: {#refs}
+:::

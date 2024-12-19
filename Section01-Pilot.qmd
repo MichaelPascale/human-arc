@@ -3,6 +3,7 @@ format:
   typst: default
 execute:
   cache: true
+output-dir: artifacts/pilot/
 ---
 
 ```{r, setup}
@@ -61,8 +62,6 @@ For the following we will use Task 1 (@fig-task-1) as a case study. @fig-pilot-f
 grid_sizes <-
   distinct(training, task, x, y) |>
   summarise(.by=task, across(x:y, n_distinct), max=max(x,y))
-
-
 
 dimens <-  grid_sizes[grid_sizes[['task']] == 1, 'max']
 
@@ -196,60 +195,4 @@ library(lme4)
 model <- glmer(correct ~ e1 + e2 + e3 + (1|item), data, binomial)
 
 summary(model)
-```
-
-
-\newpage
-
-# Appendix A - Full Item Set
-
-```{r, appendix-all-tasks}
-#| include: true
-#| output: true
-#| fig-width: 6.5
-#| fig-height: 7
-#| fig-cap: "The subset of 40 ARC items completed by study participants."
-
-plot_task_item <- function (item) {
-    dimen <- with(item, max(x,y)) + 1
-    
-    ggplot(item) +
-    geom_raster(aes(y, -x, fill=val)) +
-    
-    facet_grid(interaction(phase, item, sep=' ', lex.order=TRUE) ~ io, switch='y') +
-    
-    scale_fill_manual(values=arcpal, guide='none') +
-    labs(x = NULL, y = NULL) +
-    xlim(0, dimen) + ylim(0, -dimen) +
-    coord_fixed(1, c(1, dimen-1), c(-1, -dimen+1),FALSE)+
-    theme_bw() +
-    theme(
-      axis.title = element_blank(),
-      plot.margin = unit(rep(0, 4), "null"),
-      panel.spacing = unit(0, "null"),
-      panel.background = element_rect(fill='transparent', color=NA),
-      plot.background = element_rect(fill='transparent', color=NA),
-      legend.background = element_rect(fill='transparent', color=NA),
-      legend.key = element_rect(fill='transparent', color=NA),
-      axis.ticks = element_blank(),
-      axis.text = element_blank(),
-      legend.justification = c(0, 1),
-      strip.text = element_text(size=6)
-    )
-}
-
-lapply(split(training, training$task), plot_task_item) |>
-  wrap_plots(tag_level='keep', ncol=5) +
-  plot_annotation(tag_levels='1')
-```
-
-\newpage
-
-# Appendix B - Per Item Accuracy
-
-```{r}
-#| include: true
-#| output: true
-attempts_by_problem |> 
-  mutate(.keep='none', `Task Item`=problem, `Pr(Correct First Try)`=sprintf('%.2f', prob_first_try), `Median(# Attempts)`=sprintf('%.1f', median_attempts))
 ```

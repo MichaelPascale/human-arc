@@ -26,17 +26,19 @@ read_behavioral_json <- \(path) {
   x1$session |>
     map(\(session) {
       imap(session$attempts, \(attempt, index){
+        # if (hasName(attempt[[1]], 'problem')) print(attempt[[1]]$problem |> str_extract('^\\d+'))
         data.frame(
           attempt=index,
           n_events=length(attempt),
           start=attempt[[1]]$time,
           end=attempt[[length(attempt)]]$time,
           first=attempt[[1]]$desc,
-          last=attempt[[length(attempt)]]$desc
+          last=attempt[[length(attempt)]]$desc,
+          problem = if (hasName(attempt[[1]], 'problem')) as.integer(str_extract(attempt[[1]]$problem, '^\\d+')) else NA
         )
       }) |>
       list_rbind() |>
-      mutate(problem=session$id)
+      mutate(i=session$id)
     }) |>
     list_rbind() |>
     mutate(
@@ -45,12 +47,15 @@ read_behavioral_json <- \(path) {
       time=time,
       file=path
     ) |>
-    relocate(subject, problem)
+    relocate(subject, i, problem) |>
+    group_by(subject, i) |>
+    fill(problem, .direction='downup') |>
+    ungroup()
 }
 
 datapaths=c(
-  mturk='data/ARC-data/MTurk/mturk subject data',
-  bu='data/ARC-data/BU online/subject_data/all-sub-raw',
+  # mturk='data/ARC-data/MTurk/mturk subject data',
+  # bu='data/ARC-data/BU online/subject_data/all-sub-raw',
   pilot1='data/ARC-eyetracking-pilot1/data',
   pilot2='data/ARC-eyetracking/data'
 )
@@ -65,7 +70,7 @@ behavioral <-
 
 behavioral
 
-save(etdata, behavioral, subject_id_map, file='data/ET-Pilot.rda')
+save(etdata, behavioral, training, subject_id_map, file='data/ET-Pilot.rda')
 which(datapaths |> str_detect('BU'))
 
 # behavioral |> 
